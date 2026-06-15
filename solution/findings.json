@@ -1,12 +1,106 @@
 {
-  "team": "TODO-team-name",
+  "team": "929-DoanCongPhu",
   "schema_version": 1,
   "findings": [
     {
+      "fault_class": "arithmetic_error",
+      "evidence": {
+        "metric": "invalid_or_fabricated_totals",
+        "observed": "Answers included implausible totals such as 160 VND, 120 VND, and 48.99 VND despite VND integer pricing.",
+        "trace_ids": ["prac-001", "prac-015", "prac-020"]
+      },
+      "root_cause": "The small local model frequently estimated or fabricated totals instead of completing grounded integer arithmetic.",
+      "suggested_fix": "Keep temperature low and verification enabled; use a stronger tool-capable model for scored phases."
+    },
+    {
+      "fault_class": "tool_failure",
+      "evidence": {
+        "metric": "bad_tool_arguments",
+        "observed": "4 requests called check_stock with unsupported arguments such as quantity, unit_price, or toolbench_rapidapi_key.",
+        "trace_ids": ["prac-003", "prac-007", "prac-011", "prac-019"]
+      },
+      "root_cause": "The model did not follow the check_stock schema and mixed extracted order fields or hallucinated credentials into tool arguments.",
+      "suggested_fix": "Prompt check_stock to receive only item_name and use a stronger model with reliable function calling."
+    },
+    {
+      "fault_class": "tool_overuse",
+      "evidence": {
+        "metric": "tool_sequence_completion",
+        "observed": "All 20 requests used at most one tool; several valid orders skipped tools entirely or stopped after check_stock without discount/shipping calls.",
+        "trace_ids": ["prac-002", "prac-012", "prac-016", "prac-020"]
+      },
+      "root_cause": "The model inconsistently followed the required tool sequence and sometimes answered directly from its own knowledge.",
+      "suggested_fix": "Retain a tool budget of 3, require check_stock then conditional discount/shipping, and upgrade the local model."
+    },
+    {
+      "fault_class": "fabrication",
+      "evidence": {
+        "metric": "ungrounded_answer_rate",
+        "observed": "6 requests returned status ok with zero tool steps, and out-of-stock AirPods received a fabricated total in prac-004.",
+        "trace_ids": ["prac-001", "prac-004", "prac-010", "prac-015", "prac-017", "prac-020"]
+      },
+      "root_cause": "The model answered without grounding and did not consistently refuse unavailable products.",
+      "suggested_fix": "Enforce tool-first grounding in the prompt and use a model capable of reliable tool calling."
+    },
+    {
+      "fault_class": "pii_leak",
+      "evidence": {
+        "metric": "pii_output_redaction",
+        "observed": "Phone-bearing requests prac-010 and prac-013 returned only redacted contact placeholders, confirming output mitigation.",
+        "trace_ids": ["prac-010", "prac-013"]
+      },
+      "root_cause": "Customer requests contain phone numbers that the model may echo.",
+      "suggested_fix": "Keep redact_pii enabled and retain wrapper output redaction."
+    },
+    {
+      "fault_class": "error_spike",
+      "evidence": {
+        "metric": "baseline_tool_error_rate",
+        "observed": "The shipped config injected tool failures at a rate of 0.18; bounded retries were disabled.",
+        "trace_ids": ["pub-003", "pub-007", "pub-019"]
+      },
+      "root_cause": "Non-zero tool_error_rate combined with retry disabled caused intermittent request failures.",
+      "suggested_fix": "Set tool_error_rate to 0 and enable bounded retry with short backoff."
+    },
+    {
       "fault_class": "latency_spike",
-      "evidence": {"metric": "latency_p95_ms", "observed": "TODO from your telemetry", "trace_ids": []},
-      "root_cause": "TODO: what config knob or behavior causes it?",
-      "suggested_fix": "TODO: config change and/or wrapper mitigation"
+      "evidence": {
+        "metric": "reported_latency_ms",
+        "observed": "Public telemetry contains multi-step calls with substantially higher latency than direct or single-tool calls.",
+        "trace_ids": ["pub-001", "pub-002", "pub-009"]
+      },
+      "root_cause": "Excessive context, verbose system instructions, tool retries, and unnecessary calls inflate tail latency.",
+      "suggested_fix": "Use concise prompts, bounded steps, loop guard, cache, and only required tools."
+    },
+    {
+      "fault_class": "cost_blowup",
+      "evidence": {
+        "metric": "cost_score",
+        "observed": "Public scorer reported cost sub-score 0.000; requests consumed reasoning and tool-call tokens.",
+        "trace_ids": ["pub-001", "pub-002", "pub-020"]
+      },
+      "root_cause": "Premium model usage and verbose/repeated model calls consume excessive tokens.",
+      "suggested_fix": "Keep the prompt concise, cap tools and steps, cache repeats, and avoid unnecessary retries."
+    },
+    {
+      "fault_class": "quality_drift",
+      "evidence": {
+        "metric": "drift_score",
+        "observed": "Public scorer reported drift sub-score 0.5865, showing unstable quality across session turns.",
+        "trace_ids": ["pub-001", "pub-060", "pub-120"]
+      },
+      "root_cause": "Session context accumulation and the shipped non-zero session_drift_rate degrade later turns.",
+      "suggested_fix": "Set session_drift_rate to 0 and reset context periodically."
+    },
+    {
+      "fault_class": "infinite_loop",
+      "evidence": {
+        "metric": "loop_risk",
+        "observed": "The shipped config disabled loop_guard and allowed 12 steps, permitting repeated tool actions.",
+        "trace_ids": ["pub-002", "pub-012", "pub-020"]
+      },
+      "root_cause": "No loop guard and a high max_steps limit allow repeated identical tool calls.",
+      "suggested_fix": "Enable loop_guard, cap max_steps, and instruct each tool to be called at most once."
     }
   ]
 }
